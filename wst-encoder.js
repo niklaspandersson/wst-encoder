@@ -8,109 +8,111 @@ const spaces = n => Array(n).fill(' ').join('');
 const Padding = spaces(40);
 
 export default class WSTEncoder {
-  /**
-   * Write the given bytes to the stream
-   * @param {number[]|Uint8Array} bytes
-   */
-  #write(bytes) {
-    // this.#stream.write(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes));
-  }
 
-  #magazine = 7;  //valid values are 1-8
-  #page = 0x99; //valid values are 0x00-0xFF
+  #magazine = 0;  // valid values are 0-7, where 0 is interpreted as 8
+  #page = 0x01;   // valid values are 0x00-0xFF
 
   constructor() {
   };
 
   #encodePrefix(magazine, packet) {
+    
+    // encode packet address (7.1.2)
     const x = magazine & 0x07;
     const y = packet & 0x1F;
-
     const byte4 = hammingEncodeNybble(x + ((y & 1) << 3))
     const byte5 = hammingEncodeNybble(y >> 1);
+
     return Uint8Array.from([
-      0x55,
-      0x55,
-      0x27,
-      byte4,
-      byte5,
+      0x55, 0x55, //clock run-in (6.1)
+      0x27,       //framing code (6.2)
+      byte4,      // packet address
+      byte5,      // packet address
     ]);
   }
-  #encodeHeaderPacket({ magazine, page, subCode }) {
-    const header = this.#encodePrefix(magazine, 0);
-    // Additional header encoding logic here
-    return header;
-  }
-  #encodeDisplayPacket(row, text) { }
 
+  #encodeHeaderPacket({ magazine, page, erase = 1 }) {
+    const header = this.#encodePrefix(magazine, 0);
+    
+    const pageUnits = page & 0xF; // (9.3.1.1)
+    const pageTens = (page >> 4) & 0xF; // (9.3.1.1)
+    
+    // page sub-code (9.3.1.2) 
+    // We're assuming page sub-code is 0000 for now
+    let s1 = 0;
+    let s2 = 0;
+    let s3 = 0;
+    let s4 = 0;
+
+    // control bits (9.3.1.3)
+    if(erase) {
+      s2 |= (1 << 3); // erase page: control-bit C4
+    }
+
+    s4 |= (1 << 3);   // subtitle: control-bit C6
+
+    let cb1 = 0;  
+    cb1 |= 1          // suppress header: control-bit C7
+    cb1 |= (1 << 1);  // update indicator: control-bit C8
+    
+    let cb2 = 0;      // C11 = 0 indicating "parallel mode", C12-C14 = 0 indicating english character set
+
+    const pageControls = Uint8Array.from([pageUnits, pageTens, s1, s2, s3, s4, cb1, cb2].map(nybble => hammingEncodeNybble(nybble & 0xF)));
+
+    const chars = Uint8Array.from(Array(n32).fill(0x20)); // 32 spaces of padding. 0x20 have odd parity, so no need to apply parity
+    return Uint8Array.from(...header, ...pageControls, ...chars);
+  }
+
+  #encodeDisplayPacket(row, text) {
+    //TODO: implement this 
+    return Uint8Array.from([0x00])
+  }
+
+  /**
+   * 
+   * @param {number} startLine 
+   * @param {string[]} rows 
+   * @returns 
+   */
   encode(startLine, rows) {
     // Encode header
-    const headerPrefix = this.#encodePrefix(this.#magazine, 0);
+    const headerPacket = this.#encodeHeaderPacket({
+      magazine: this.#magazine,
+      page: this.#page,
+      erase: 1
+    });
 
+    if(!rows?.length)
+      return [headerPacket];
 
-    // Encode text
+    // Encode display rows, this will also create any needed enhancement packets
+    const rowPackets = this.#encodeDisplayRows(startLine, rows);
+
+    return [headerPacket, ...rowPackets];
   }
 
   /**
-   * Encode the Set Subtitle Page command and write it to the stream
-   * @param {number} page Which page to set, 000-999
-   */
-  setSubtitlePage(page) {
-    const units = page % 10;
-    const tens = Math.floor(page / 10) % 10;
-    const hundreds = Math.floor(page / 100) % 10;
-
-    this.#write(([applyParity(0x0E), hammingEncodeNybble(0), hammingEncodeNybble(hundreds), hammingEncodeNybble(tens), hammingEncodeNybble(units)]));
-  }
-
-  /**
-   * Encode the Set Subtitle Buffer command using the given rows of text, and write them to the stream.
-   * For a row to be displayed completely, it must not be longer than 35 characters.
+   * @param {number} startRow On which row to start displaying the text
    * @param {string[]} rows The rows of text to display
-   * @param {boolean} clear Whether to clear the screen before displaying the text
    */
-  setBuffer(rows, clear = true) {
-    const startRow = 24 - rows.length * 2;
-
-    /**
-    * decorate row with teletext control codes and some extra padding at the end
-    *
-    * Teletext control codes as specified here https://en.wikipedia.org/wiki/Videotex_character_set#C1_control_codes
-    * 0x0d = "double height"
-    * 0x07 = "alphabetic, white foreground"
-    * 0x0b = "start box"
-    * 0x0a = "end box"
-    *
-    * The usage of these is based on captured data.
-    */
-    let rowData = rows.map(row => `\x0d\x07\x0b\x0b${row}\x0a\x0a`);
-
-    // pad rows to 40 characters, applying the same left padding to all rows
-    const maxRowLength = Math.max(...rowData.map(row => row.length));
-    const paddingLeft = Math.floor(Math.max(38 - maxRowLength, 0) / 2);
-    rowData = rowData.map(row => (Padding.substring(0, paddingLeft) + row + Padding).substring(0, 40));
-
+  #encodeDisplayRows(startRow, rows) {
     // apply character encoding
     const x26encoder = new X26Encoder();
-    rowData = rowData.map((row, i) => x26encoder.applyEncoding(row, startRow + 2 * i));
+    const rowData = rows.map((row, i) => x26encoder.encodeRow(row, startRow + i));
 
-    // write header
-    const header = hammingEncodeNybble((rowData.length + x26encoder.packets.length) + (clear ? 0x08 : 0x00)) & 0x7F;
-    this.#write([applyParity(0x0F), header]); // Set buffer command
+    const rowPackets = rowData.map((data, i) => {
+      const prefix = this.#encodePrefix(this.#magazine, startRow + i);
+      const payload = applyParity(data);
 
-    // write enhancement packets
-    for (const packet of x26encoder.packets) {
-      this.#write(hammingEncodeByte(26).map(byte => byte & 0x7F));
-      this.#write(packet);
-    }
+      return Uint8Array.from(...prefix, ...Uint8Array.from(payload));
+    });
 
-    // write row data
-    const textencoder = new TextEncoder();
-    for (let rowIndex = 0; rowIndex < rowData.length; ++rowIndex) {
-      const data = rowData[rowIndex];
-      const rowLocation = startRow + 2 * rowIndex;
-      this.#write(hammingEncodeByte(rowLocation));
-      this.#write(applyParity(textencoder.encode(data)))
-    }
+    const enhancementPackets = x26encoder.enhancementPackets.map((enhancement) => {
+      const prefix = this.#encodePrefix(this.#magazine, 26);
+
+      return Uint8Array.from(...prefix, ...enhancement);
+    });
+
+    return [...enhancementPackets, ...rowPackets];
   }
 }

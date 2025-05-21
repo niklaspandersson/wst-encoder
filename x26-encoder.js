@@ -1,7 +1,7 @@
 import { bitmask } from "./bit-utils.js";
 import { hammingEncode24, hammingEncodeNybble } from "./parity.js";
 
-const G0_national_subset = {
+const G0_swedish_subset = {
   '#': '#',
   '¤': '¤',
   'É': '@',
@@ -15,6 +15,21 @@ const G0_national_subset = {
   'ö': '|',
   'å': '}',
   'ü': '~'
+}
+const G0_english_subset = {
+  '£': '#',
+  '$': '¤',
+  '@': '@',
+  '←': '[',   // left arrow 
+  '½': '\\',  // 1/2
+  '→': ']',   // right arrow
+  '↑': '^',   // up arrow
+  '#': '_',
+  '—': '`',   // long dash
+  '¼': '{',   // 1/4
+  '‖': '|',   // double pipe
+  '¾': '}',   // 3/4
+  '÷': '~'    // division symbol
 }
 
 const G2_latin = ['\x00', '¡', '¢', '£', '$', '¥', '#', '§', '¤', '‘', '“', '«', '←', '↑', '→', '↓', // 2x
@@ -74,17 +89,17 @@ export default class X26Encoder {
    * Applies character encoding to a row of text, while keeping track of the enhancements needed
    * @param {string} str The row to apply character encoding to
    * @param {number} rowLocation The location of the row on the screen
-   * @returns {string} The row with character encoding applied
+   * @returns {string[]} The row with character encoding applied
    */
-  applyEncoding(str, rowLocation) {
+  encodeRow(str, rowLocation) {
     const row = Array.from(str);
     let firstRowEnhancement = true;
 
     for (let j = 0; j < row.length; j++) {
       const char = row[j];
-      if (G0_national_subset[char]) {
-        row[j] = G0_national_subset[char];
-      } else if (G2_latin.includes(char)) {
+      if (G0_english_subset[char]) {
+        row[j] = G0_english_subset[char];
+      as} else if (G2_latin.includes(char)) {
         const char_index = G2_latin.indexOf(char);
         row[j] = G2_latin_replacements[char_index];
         if (firstRowEnhancement) {
@@ -94,13 +109,13 @@ export default class X26Encoder {
         this.#enhancements.push({ mode: Mode.G2Character, address: j, data: char_index + 0x20 });
       }
     }
-    return row.join('');
+    return row;
   }
 
   /**
    * @returns {number[][]} A list of x26 packets, containing all enhancements needed for the encoded rows
    */
-  get packets() {
+  get enhancementPackets() {
     return this.#packets ?? (this.#packets = this.#generatePackets());
   }
 
