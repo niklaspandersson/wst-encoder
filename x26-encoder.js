@@ -89,7 +89,7 @@ export default class X26Encoder {
    * Applies character encoding to a row of text, while keeping track of the enhancements needed
    * @param {string} str The row to apply character encoding to
    * @param {number} rowLocation The location of the row on the screen
-   * @returns {string[]} The row with character encoding applied
+   * @returns {string} The row with character encoding applied
    */
   encodeRow(str, rowLocation) {
     const row = Array.from(str);
@@ -99,7 +99,7 @@ export default class X26Encoder {
       const char = row[j];
       if (G0_english_subset[char]) {
         row[j] = G0_english_subset[char];
-      as} else if (G2_latin.includes(char)) {
+      } else if (G2_latin.includes(char)) {
         const char_index = G2_latin.indexOf(char);
         row[j] = G2_latin_replacements[char_index];
         if (firstRowEnhancement) {
@@ -109,7 +109,7 @@ export default class X26Encoder {
         this.#enhancements.push({ mode: Mode.G2Character, address: j, data: char_index + 0x20 });
       }
     }
-    return row;
+    return row.join('');
   }
 
   /**

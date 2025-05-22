@@ -1,132 +1,42 @@
+import { Buffer } from 'node:buffer';
 import { describe, it, expect } from '@jest/globals';
-import { PassThrough } from 'stream';
-import { Buffer } from 'buffer';
-import NewforEncoder from './newfor-encoder';
 
-describe('NewforEncoder', () => {
-  it('should write 0x10 to the stream when "display" is called', () => {
-    // Arrange
-    const stream = new PassThrough();
-    const encoder = new NewforEncoder(stream);
+import WSTEncoder from './wst-encoder.js';
 
-    // Act
-    encoder.display();
+describe('WSTEncoder', () => {
+  describe('encoders', () => {
 
-    //Assert
-    expect(stream.read()).toEqual(Buffer.from([0x10]));
-  });
-
-  it('should write 0x98 to the stream when "hide" is called', () => {
-    // Arrange
-    const stream = new PassThrough();
-    const encoder = new NewforEncoder(stream);
-
-    // Act
-    encoder.hide();
-
-    //Assert
-    expect(stream.read()).toEqual(Buffer.from([0x98]));
-  });
-
-  describe('setSubtitlePage', () => {
-    it.each([
-      { page: 0, capture: [0x0e, 0x15, 0x15, 0x15, 0x15] },
-      { page: 399, capture: [0x0e, 0x15, 0x5e, 0xc7, 0xc7] },
-      { page: 999, capture: [0x0e, 0x15, 0xc7, 0xc7, 0xc7] },
-    ])('should match the captured data', ({ page, capture }) => {
+    it('encodeSubtitle', () => {
       // Arrange
-      const stream = new PassThrough();
-      const encoder = new NewforEncoder(stream);
+      const encoder = new WSTEncoder();
 
       // Act
-      encoder.setSubtitlePage(page);
+      // https://zxnet.co.uk/teletext/editor/#0:QIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECAWLnadezDzQd8PNBoy8sooUgQIECBAgQIECBAgQIECBAgQIBYubh16d2dBh3b-mjLyQct_dB00YeiDTzQbN-7Pl5ChSBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECBAgQIECA:PS=401e:RE=0:zx=Uc00:PN=801:SC=0
+      const res = encoder.encodeSubtitle(['Niklas was here', 'Making another row that is longer']);
 
+      for (const data of res) {
+        const buf = Buffer.from(data);
+        console.log(buf);
+        console.log(buf.toString('base64'));
+      }
       //Assert
-      expect(stream.read()).toEqual(Buffer.from(capture));
-    });
-  });
-
-  describe('setBuffer', () => {
-
-    it('should first write 0x8F (the set buffer command)', () => {
-      // Arrange
-      const stream = new PassThrough();
-      const encoder = new NewforEncoder(stream);
-
-      // Act
-      encoder.setBuffer(['Hello, World!']);
-
-      //Assert
-      expect(stream.read()[0]).toEqual(0x8F);
+      expect(res.length).toEqual(3);
     });
 
-    it.each([1, 2, 3, 4, 5, 6, 7])('should write 2 header bytes, then exactly 42 bytes per row to the stream (%i rows)', (n) => {
+    it('encodeDummy', () => {
       // Arrange
-      const stream = new PassThrough();
-      const encoder = new NewforEncoder(stream);
+      const encoder = new WSTEncoder();
 
       // Act
-      // Write n rows, increasing the length of the string each time, both under- and overshooting the 42 byte limit
-      encoder.setBuffer(Array(n).fill('Hello, World!, Hello, World!, Hello, World!, Hello, World!').map(str => str.substring(0, 7 * (n + 1))));
+      const res = encoder.encodeDummy();
 
+      for (const data of res) {
+        const buf = Buffer.from(data);
+        console.log(buf);
+        console.log(buf.toString('base64'));
+      }
       //Assert
-      expect(stream.read().length).toEqual(2 + n * 42);
-    });
-
-    it('Should match the captured data for the string "Ttt test."', () => {
-      // Arrange
-      const stream = new PassThrough();
-      const encoder = new NewforEncoder(stream);
-
-      // Act
-      encoder.setBuffer(["Ttt test."]);
-
-      //Assert
-      expect(stream.read()).toEqual(Buffer.from([0x8F, 0x47, 0x02, 0x38, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x0d, 0x07, 0x0b, 0x0b, 0x54, 0xf4, 0xf4, 0x20, 0xf4, 0xe5, 0x73, 0xf4, 0xae, 0x8a, 0x8a, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20]));
-    });
-
-    it.skip('Should match the captured data for the string "Vi skal have mere vild natur."', () => {
-      // Arrange
-      const stream = new PassThrough();
-      const encoder = new NewforEncoder(stream);
-
-      // Act
-      encoder.setBuffer(["Vi skal have mere vild natur."]);
-
-      //Assert
-      expect(stream.read()).toEqual(Buffer.from([0x8f, 0x47, 0x02, 0x38, 0x0d, 0x07, 0x0b, 0x0b, 0xd6, 0xe9, 0x20, 0x73, 0x6b, 0x61, 0xec, 0x20, 0x68, 0x61, 0x76, 0xe5, 0x20, 0x6d, 0xe5, 0xf2, 0xe5, 0x20, 0x76, 0xe9, 0xec, 0x64, 0x20, 0x6e, 0x61, 0xf4, 0x75, 0xf2, 0xae, 0x8a, 0x8a, 0x20, 0x20, 0x20, 0x20, 0x20]));
-    });
-
-    it('Should match the captured data for the string "Vi skal have mere vild natur. Vi skal have mere vild natur 2 linjer."', () => {
-      // Arrange
-      const stream = new PassThrough();
-      const encoder = new NewforEncoder(stream);
-
-      // Act
-      encoder.setBuffer(["Vi skal have mere vild natur. Vi", "skal have mere vild natur 2 linjer."]);
-
-      //Assert
-      const capture2rows = [0x8f, 0x0c,
-        0x02, 0x64, 0x0d, 0x07, 0x0b, 0x0b, 0xd6, 0xe9, 0x20, 0x73, 0x6b, 0x61, 0xec, 0x20, 0x68, 0x61, 0x76, 0xe5, 0x20, 0x6d, 0xe5, 0xf2, 0xe5, 0x20, 0x76, 0xe9, 0xec, 0x64, 0x20, 0x6e, 0x61, 0xf4, 0x75, 0xf2, 0xae, 0x20, 0xd6, 0xe9, 0x8a, 0x8a, 0x20, 0x20,
-        0x02, 0x38, 0x0d, 0x07, 0x0b, 0x0b, 0x73, 0x6b, 0x61, 0xec, 0x20, 0x68, 0x61, 0x76, 0xe5, 0x20, 0x6d, 0xe5, 0xf2, 0xe5, 0x20, 0x76, 0xe9, 0xec, 0x64, 0x20, 0x6e, 0x61, 0xf4, 0x75, 0xf2, 0x20, 0x32, 0x20, 0xec, 0xe9, 0x6e, 0xea, 0xe5, 0xf2, 0xae, 0x8a]
-
-      expect(stream.read()).toEqual(Buffer.from(capture2rows));
-    });
-
-    it('Should encode danish letters properly', () => {
-      // Arrange
-      const stream = new PassThrough();
-      const encoder = new NewforEncoder(stream);
-
-      // Act
-      encoder.setBuffer(["ÆØÅæøå."]);
-
-      //Assert
-      const captureDanishLetters = [0x8f, 0x0c,
-        0x02, 0x0c, 0x15, 0x79, 0x93, 0x00, 0x02, 0x3d, 0x61, 0x0d, 0xbd, 0x69, 0x15, 0xbd, 0x71, 0x29, 0x3d, 0x79, 0x74, 0xff, 0x80, 0x74, 0xff, 0x80, 0x74, 0xff, 0x80, 0x74, 0xff, 0x80, 0x74, 0xff, 0x80, 0x74, 0xff, 0x80, 0x74, 0xff, 0x80, 0x74, 0x7f, 0xff,
-        0x02, 0x38, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x0d, 0x07, 0x0b, 0x0b, 0xc1, 0x4f, 0x5d, 0x61, 0xef, 0xfd, 0xae, 0x8a, 0x8a, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20]
-
-      expect(stream.read()).toEqual(Buffer.from(captureDanishLetters));
+      expect(res.length).toEqual(1);
     });
   })
 });
